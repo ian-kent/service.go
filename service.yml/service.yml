@@ -1,0 +1,31 @@
+---
+name: Example service
+source: github.com/ian-kent/service.go/examples/web
+version: 0.0.1
+
+targets:
+  build: echo build
+  test: echo test
+  pwd: pwd
+
+tags:
+  - web
+  - public
+
+config:
+  - desc: Bind address, e.g. `:8080` or `127.0.0.1:8080`
+    env: BIND_ADDR
+    flag: -bind-addr
+    type: string
+  - desc: Key file to enable SSL
+    env: KEY_FILE
+    flag: -key-file
+    type: string
+  - desc: Certificate file to enable SSL
+    env: CERT_FILE
+    flag: -cert-file
+    type: string
+
+deps:
+  - source: ./testdep
+    version: 0.0.1
