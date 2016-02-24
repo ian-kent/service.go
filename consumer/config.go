@@ -27,29 +27,29 @@ type defaultConfig struct {
 	ConsumerGroup   string `env:"CONSUMER_GROUP" flag:"consumer-group" flagDesc:"Consumer group"`
 }
 
-// DefaultConfig is a default Config implementation
-type DefaultConfig struct {
+// DefaultConsumerConfig is a default Config implementation
+type DefaultConsumerConfig struct {
 	defaultConfig
 }
 
 // ConsumerGroup implements Config.ConsumerGroup
-func (c DefaultConfig) ConsumerGroup() string { return c.defaultConfig.ConsumerGroup }
+func (c DefaultConsumerConfig) ConsumerGroup() string { return c.defaultConfig.ConsumerGroup }
 
 // ProcessingTimeout implements Config.ProcessingTimeout
-func (c DefaultConfig) ProcessingTimeout() time.Duration {
+func (c DefaultConsumerConfig) ProcessingTimeout() time.Duration {
 	return time.Duration(c.defaultConfig.Timeout) * time.Second
 }
 
 // ZookeeperURL implements Config.ZookeeperURL
-func (c DefaultConfig) ZookeeperURL() string { return c.defaultConfig.ZookeeperURL }
+func (c DefaultConsumerConfig) ZookeeperURL() string { return c.defaultConfig.ZookeeperURL }
 
 // Topics implements Config.Topics
-func (c DefaultConfig) Topics() []string { return strings.Split(c.defaultConfig.Topics, ",") }
+func (c DefaultConsumerConfig) Topics() []string { return strings.Split(c.defaultConfig.Topics, ",") }
 
 // ZookeeperChroot implements Config.ZookeeperChroot
-func (c DefaultConfig) ZookeeperChroot() string {
+func (c DefaultConsumerConfig) ZookeeperChroot() string {
 	return c.defaultConfig.ZookeeperChroot
 }
 
 // InitialOffset implements Config.InitialOffset
-func (c DefaultConfig) InitialOffset() int64 { return sarama.OffsetOldest }
+func (c DefaultConsumerConfig) InitialOffset() int64 { return sarama.OffsetOldest }

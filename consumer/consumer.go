@@ -3,6 +3,7 @@ package consumer
 import (
 	"os"
 	"os/signal"
+	"time"
 
 	golog "log"
 
@@ -11,6 +12,9 @@ import (
 	"github.com/wvanbergen/kafka/consumergroup"
 	"github.com/wvanbergen/kazoo-go"
 )
+
+var maxAttempts = 100
+var maxExp = 10000
 
 func init() {
 	sarama.Logger = golog.New(os.Stdout, "[Sarama] ", golog.LstdFlags)
@@ -80,16 +84,36 @@ func (kc *kafkaConsumer) Start() chan Message {
 	}
 	zookeeperNodes, cfg.Zookeeper.Chroot = kazoo.ParseConnectionString(url)
 
-	cg, err := consumergroup.JoinConsumerGroup(
-		kc.Config.ConsumerGroup(),
-		kc.Config.Topics(),
-		zookeeperNodes,
-		cfg,
-	)
+	var cg *consumergroup.ConsumerGroup
+	var err error
+	var attempts, curExp int
 
-	if err != nil {
-		log.Error(err, nil)
-		os.Exit(1)
+	for {
+		attempts++
+		cg, err = consumergroup.JoinConsumerGroup(
+			kc.Config.ConsumerGroup(),
+			kc.Config.Topics(),
+			zookeeperNodes,
+			cfg,
+		)
+		if err != nil {
+			log.Error(err, nil)
+			if attempts > maxAttempts {
+				log.Debug("reached maximum attempts, exiting", nil)
+				os.Exit(1)
+			}
+			if curExp == 0 {
+				curExp = 2
+			}
+			curExp *= 2
+			if curExp > maxExp {
+				curExp = maxExp
+			}
+			log.Debug("sleeping", log.Data{"ms": curExp})
+			time.Sleep(time.Millisecond * time.Duration(curExp))
+			continue
+		}
+		break
 	}
 
 	kc.consumerGroup = cg

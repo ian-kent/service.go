@@ -59,7 +59,7 @@ type Requester interface {
 // Resulter ...
 type Resulter interface {
 	Do() (*http.Response, error)
-	Result(dest interface{}) (*http.Response, error)
+	Result(dest interface{}) (*http.Response, []byte, error)
 	Stream(delim byte, c chan StreamResulter) (*http.Response, error)
 }
 
@@ -67,7 +67,7 @@ type Resulter interface {
 type StreamResulter interface {
 	Bytes() []byte
 	Error() error
-	Result(dest interface{}) error
+	Result(dest interface{}) ([]byte, error)
 }
 
 // AuthHeader ...
@@ -77,6 +77,13 @@ type AuthHeader interface {
 
 // Headers ...
 type Headers map[string]string
+
+// Plain is a type alias for a string containing a plain Auth header
+type Plain string
+
+func (p Plain) String() string {
+	return string(p)
+}
 
 // Token is a type alias for a string containing an OAuth2 token
 type Token string
@@ -124,7 +131,7 @@ func (sr streamResult) Error() error {
 	return sr.err
 }
 
-func (sr streamResult) Result(dest interface{}) (err error) {
+func (sr streamResult) Result(dest interface{}) (body []byte, err error) {
 	return sr.requester.unmarshal(bytes.NewReader(sr.bytes), sr.response.Header.Get("Content-Type"), dest)
 }
 
@@ -139,7 +146,50 @@ type serviceCall struct {
 	unmarshaler    func([]byte, interface{}) error
 }
 
-func (r requester) unmarshal(rdr io.Reader, contentType string, dest interface{}) (err error) {
+// Unmarshal unmarhals a http request body to dest
+func Unmarshal(req *http.Request, dest interface{}) (body []byte, err error) {
+	var u func([]byte, interface{}) error
+
+	path := strings.ToLower(req.URL.Path)
+	contentType := req.Header.Get("Content-Type")
+
+	switch {
+	case contentType == "application/json",
+		strings.HasSuffix(contentType, "+json"),
+		strings.HasSuffix(path, ".json"):
+		u = json.Unmarshal
+	case contentType == "application/xml",
+		strings.HasSuffix(contentType, "+xml"),
+		strings.HasSuffix(path, ".xml"):
+		u = xml.Unmarshal
+	case contentType == "text/x-yaml",
+		contentType == "application/yaml",
+		strings.HasSuffix(contentType, "+yaml"),
+		strings.HasSuffix(path, ".yml"),
+		strings.HasSuffix(path, ".yaml"):
+		u = yaml.Unmarshal
+	}
+
+	b, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		err = fmt.Errorf("http: error reading body: %s", err)
+		return b, err
+	}
+	req.Body.Close()
+
+	if u == nil {
+		return b, fmt.Errorf("http: unmarshaler not found for request")
+	}
+
+	err = u(b, dest)
+	if err != nil {
+		err = fmt.Errorf("http: error unmarshaling body: %s", err)
+	}
+
+	return b, err
+}
+
+func (r requester) unmarshal(rdr io.Reader, contentType string, dest interface{}) (body []byte, err error) {
 	if dest != nil {
 		u := r.unmarshaler
 
@@ -163,13 +213,15 @@ func (r requester) unmarshal(rdr io.Reader, contentType string, dest interface{}
 			}
 		}
 
-		if u != nil {
-			b, err := ioutil.ReadAll(rdr)
-			if err != nil {
-				err = fmt.Errorf("http: error reading from reader: %s", err)
-				return err
-			}
+		b, err := ioutil.ReadAll(rdr)
+		if err != nil {
+			err = fmt.Errorf("http: error reading from reader: %s", err)
+			return b, err
+		}
 
+		body = b
+
+		if u != nil {
 			if rc, ok := rdr.(io.Closer); ok {
 				err = rc.Close()
 				if err != nil {
@@ -200,6 +252,16 @@ func (r requester) Do() (*http.Response, error) {
 				req.Header.Set(hdr, h)
 			}
 		}
+	}
+
+	if r.serviceCall.headers != nil {
+		for k, v := range r.headers {
+			req.Header.Set(k, v)
+		}
+	}
+
+	if r.serviceCall.body != nil {
+		req.Body = ioutil.NopCloser(r.serviceCall.body)
 	}
 
 	if r.serviceCall.auth != nil {
@@ -239,15 +301,18 @@ func (r requester) Stream(delim byte, c chan StreamResulter) (*http.Response, er
 }
 
 // Result ...
-func (r requester) Result(dest interface{}) (*http.Response, error) {
+func (r requester) Result(dest interface{}) (*http.Response, []byte, error) {
 	res, err := r.Do()
 	if err != nil {
-		return res, err
+		return res, nil, err
 	}
 
-	err = r.unmarshal(res.Body, res.Header.Get("Content-Type"), dest)
+	b, err := r.unmarshal(res.Body, res.Header.Get("Content-Type"), dest)
+	if err != nil {
+		err = fmt.Errorf("http: error unmarshaling result: %s", err)
+	}
 
-	return res, err
+	return res, b, err
 }
 
 func (r *requester) ForwardHeaders(hdrs ...string) Requester {

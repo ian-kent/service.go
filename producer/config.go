@@ -13,12 +13,12 @@ type defaultConfig struct {
 	KafkaBrokers string `env:"KAFKA_BROKERS" flag:"kafka-brokers" flagDesc:"Kafka brokers"`
 }
 
-// DefaultConfig is a default Config implementation
-type DefaultConfig struct {
+// DefaultProducerConfig is a default Config implementation
+type DefaultProducerConfig struct {
 	defaultConfig
 }
 
 // KafkaBrokers implements Config.KafkaBrokers
-func (c DefaultConfig) KafkaBrokers() []string {
+func (c DefaultProducerConfig) KafkaBrokers() []string {
 	return strings.Split(c.defaultConfig.KafkaBrokers, ",")
 }
