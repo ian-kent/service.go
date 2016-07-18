@@ -60,6 +60,13 @@ func New(config Config) Renderer {
 	}), config}
 }
 
+// NewFromRender returns a new Renderer using the supplied unrolled.Render
+func NewFromRender(r *render.Render, config Config) Renderer {
+	log.Debug("creating renderer", nil)
+
+	return Renderer{r, config}
+}
+
 // HTML is an alias to github.com/unrolled/render.Render.HTML
 func HTML(w http.ResponseWriter, status int, name string, binding interface{}, htmlOpt ...render.HTMLOptions) {
 	Render.HTML(w, status, name, binding, htmlOpt...)
