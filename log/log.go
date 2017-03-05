@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/mgutz/ansi"
@@ -12,6 +13,8 @@ import (
 
 // Namespace is the service namespace used for logging
 var Namespace = "service-namespace"
+
+var humanReadableMutex sync.Mutex
 
 // HumanReadable, if true, outputs log events in a human readable format
 var HumanReadable = func() bool {
@@ -113,6 +116,8 @@ func Event(name string, context string, data Data) {
 		case "data-integrity":
 			col = ansi.LightMagenta
 		}
+		humanReadableMutex.Lock()
+		defer humanReadableMutex.Unlock()
 		fmt.Fprint(os.Stdout, col)
 		fmt.Fprintf(os.Stdout, "%s%s %s%s%s%s\n", col, m["created"], ctx, name, msg, ansi.DefaultFG)
 		if data != nil {
